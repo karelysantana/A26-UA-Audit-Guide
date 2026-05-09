@@ -1,0 +1,2198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A26 ARCADE — AUDIT BOSS FIGHT</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a1a;
+  --panel: #12122a;
+  --panel2: #1a1a3a;
+  --border: #2a2a5a;
+  --pixel: #3a3a7a;
+  --neon-pink: #FF2D78;
+  --neon-cyan: #00F5FF;
+  --neon-yellow: #FFE600;
+  --neon-green: #39FF14;
+  --neon-orange: #FF6B00;
+  --neon-purple: #BF5FFF;
+  --red: #FF2D78;
+  --text: #ffffff;
+  --text2: #aaaacc;
+  --text3: #666688;
+  --pixel-font: 'Press Start 2P', monospace;
+  --vt: 'VT323', monospace;
+  --body: 'Nunito', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; image-rendering: pixelated; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── CRT SCANLINES ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.12) 3px, rgba(0,0,0,0.12) 4px);
+  pointer-events: none;
+  z-index: 9998;
+}
+
+/* ── PIXEL GRID BG ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,245,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,245,255,0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── NAV ── */
+.arcade-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--panel);
+  border-bottom: 3px solid var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(0,245,255,0.3), 0 0 40px rgba(0,245,255,0.1);
+  display: flex;
+  align-items: center;
+  height: 60px;
+  padding: 0 1rem;
+  gap: 0;
+}
+
+.nav-logo {
+  font-family: var(--pixel-font);
+  font-size: 0.7rem;
+  color: var(--neon-yellow);
+  text-shadow: 0 0 10px var(--neon-yellow), 2px 2px 0 rgba(255,230,0,0.3);
+  margin-right: 1.5rem;
+  white-space: nowrap;
+  line-height: 1.4;
+  letter-spacing: 1px;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  padding: 0 4px;
+}
+.nav-tabs::-webkit-scrollbar { display: none; }
+
+.nav-tab {
+  padding: 0 12px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--pixel-font);
+  font-size: 0.5rem;
+  color: var(--text3);
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: all 0.1s;
+  user-select: none;
+  letter-spacing: 0.5px;
+}
+.nav-tab:hover { color: var(--text2); border-color: var(--pixel); }
+.nav-tab[data-page="ua"].active { color: var(--neon-pink); border-color: var(--neon-pink); background: rgba(255,45,120,0.1); text-shadow: 0 0 10px var(--neon-pink); }
+.nav-tab[data-page="eha"].active { color: var(--neon-cyan); border-color: var(--neon-cyan); background: rgba(0,245,255,0.08); text-shadow: 0 0 10px var(--neon-cyan); }
+.nav-tab[data-page="wins"].active { color: var(--neon-green); border-color: var(--neon-green); background: rgba(57,255,20,0.08); text-shadow: 0 0 10px var(--neon-green); }
+.nav-tab[data-page="repeat"].active { color: var(--neon-orange); border-color: var(--neon-orange); background: rgba(255,107,0,0.1); text-shadow: 0 0 10px var(--neon-orange); }
+.nav-tab[data-page="escalate"].active { color: var(--neon-pink); border-color: var(--neon-pink); background: rgba(255,45,120,0.12); text-shadow: 0 0 10px var(--neon-pink); animation: pixel-glow 1s ease-in-out infinite; }
+
+/* ── PAGES ── */
+.page { display: none; position: relative; z-index: 1; }
+.page.active { display: block; }
+
+/* ── PIXEL HERO ── */
+.pixel-hero {
+  padding: 3rem 1.5rem 2.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 3px solid var(--border);
+}
+
+.pixel-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0,245,255,0.06) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+.insert-coin {
+  font-family: var(--pixel-font);
+  font-size: 0.55rem;
+  color: var(--neon-cyan);
+  letter-spacing: 0.2em;
+  margin-bottom: 1.2rem;
+  animation: blink 1.2s step-end infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+.hero-pixel-title {
+  font-family: var(--pixel-font);
+  font-size: clamp(1.4rem, 5vw, 3rem);
+  line-height: 1.4;
+  margin-bottom: 1.2rem;
+  letter-spacing: 2px;
+}
+
+.hero-sub {
+  font-family: var(--vt);
+  font-size: 1.4rem;
+  color: var(--text2);
+  max-width: 600px;
+  margin: 0 auto 1.2rem;
+  line-height: 1.5;
+  letter-spacing: 1px;
+}
+
+.press-start {
+  display: inline-block;
+  font-family: var(--pixel-font);
+  font-size: 0.55rem;
+  background: var(--neon-yellow);
+  color: #000;
+  padding: 10px 20px;
+  border-bottom: 4px solid rgba(0,0,0,0.4);
+  border-right: 4px solid rgba(0,0,0,0.4);
+  letter-spacing: 1px;
+  animation: float 2s ease-in-out infinite;
+  cursor: default;
+}
+
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+
+/* ── PIXEL PANELS ── */
+.section { padding: 2rem 1.5rem; position: relative; }
+.section + .section { border-top: 2px solid var(--border); }
+
+.section-label {
+  font-family: var(--pixel-font);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  color: var(--neon-yellow);
+  margin-bottom: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  text-shadow: 0 0 8px var(--neon-yellow);
+}
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon-yellow), transparent);
+  box-shadow: 0 0 6px var(--neon-yellow);
+}
+
+/* ── SCORE STRIP ── */
+.score-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.score-block {
+  background: var(--panel);
+  border: 2px solid var(--pixel);
+  padding: 1rem;
+  text-align: center;
+  position: relative;
+  transition: transform 0.1s;
+}
+.score-block:hover { transform: translateY(-2px); border-color: var(--neon-cyan); }
+.score-block::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.score-label {
+  font-family: var(--pixel-font);
+  font-size: 0.38rem;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+.score-val {
+  font-family: var(--pixel-font);
+  font-size: 1.6rem;
+  line-height: 1;
+  margin-bottom: 0.3rem;
+}
+.score-sub {
+  font-family: var(--vt);
+  font-size: 1rem;
+  color: var(--text3);
+  letter-spacing: 1px;
+}
+.pink-val { color: var(--neon-pink); text-shadow: 0 0 10px var(--neon-pink), 2px 2px 0 rgba(255,45,120,0.3); }
+.yellow-val { color: var(--neon-yellow); text-shadow: 0 0 10px var(--neon-yellow), 2px 2px 0 rgba(255,230,0,0.3); }
+.green-val { color: var(--neon-green); text-shadow: 0 0 10px var(--neon-green), 2px 2px 0 rgba(57,255,20,0.3); }
+.cyan-val { color: var(--neon-cyan); text-shadow: 0 0 10px var(--neon-cyan), 2px 2px 0 rgba(0,245,255,0.3); }
+.orange-val { color: var(--neon-orange); text-shadow: 0 0 10px var(--neon-orange); }
+
+/* ── BOSS FIGHT CARDS ── */
+.boss-list { display: flex; flex-direction: column; gap: 8px; }
+
+.boss-card {
+  background: var(--panel);
+  border: 2px solid;
+  cursor: pointer;
+  transition: all 0.1s;
+  position: relative;
+  overflow: hidden;
+}
+.boss-card:hover { transform: translateX(4px); }
+.boss-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 4px;
+  height: 100%;
+}
+.boss-card.crit { border-color: var(--neon-pink); }
+.boss-card.crit::before { background: var(--neon-pink); box-shadow: 0 0 10px var(--neon-pink); }
+.boss-card.major { border-color: var(--neon-orange); }
+.boss-card.major::before { background: var(--neon-orange); box-shadow: 0 0 10px var(--neon-orange); }
+.boss-card.minor { border-color: var(--neon-cyan); }
+.boss-card.minor::before { background: var(--neon-cyan); box-shadow: 0 0 8px var(--neon-cyan); }
+
+.boss-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1rem 1rem 1.4rem;
+}
+
+.boss-hp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.boss-num {
+  font-family: var(--pixel-font);
+  font-size: 1rem;
+  line-height: 1;
+}
+.crit .boss-num { color: var(--neon-pink); text-shadow: 0 0 8px var(--neon-pink); }
+.major .boss-num { color: var(--neon-orange); text-shadow: 0 0 8px var(--neon-orange); }
+.minor .boss-num { color: var(--neon-cyan); text-shadow: 0 0 8px var(--neon-cyan); }
+
+.hp-bar-wrap {
+  width: 32px;
+  height: 6px;
+  background: var(--pixel);
+  border: 1px solid var(--border);
+}
+.hp-bar {
+  height: 6px;
+}
+.crit .hp-bar { background: var(--neon-pink); box-shadow: 0 0 6px var(--neon-pink); }
+.major .hp-bar { background: var(--neon-orange); box-shadow: 0 0 6px var(--neon-orange); }
+.minor .hp-bar { background: var(--neon-cyan); box-shadow: 0 0 6px var(--neon-cyan); }
+
+.boss-body { flex: 1; min-width: 0; }
+.boss-tag {
+  font-family: var(--pixel-font);
+  font-size: 0.38rem;
+  padding: 3px 8px;
+  margin-bottom: 0.4rem;
+  display: inline-block;
+  letter-spacing: 0.08em;
+}
+.crit .boss-tag { background: rgba(255,45,120,0.2); color: var(--neon-pink); border: 1px solid rgba(255,45,120,0.4); }
+.major .boss-tag { background: rgba(255,107,0,0.2); color: var(--neon-orange); border: 1px solid rgba(255,107,0,0.4); }
+.minor .boss-tag { background: rgba(0,245,255,0.1); color: var(--neon-cyan); border: 1px solid rgba(0,245,255,0.3); }
+
+.boss-name {
+  font-family: var(--vt);
+  font-size: 1.3rem;
+  color: var(--text);
+  line-height: 1.3;
+  letter-spacing: 1px;
+}
+
+.boss-chevron {
+  font-family: var(--pixel-font);
+  font-size: 0.6rem;
+  color: var(--text3);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.boss-card.open .boss-chevron { transform: rotate(90deg); }
+
+.boss-detail {
+  display: none;
+  padding: 0 1rem 1.2rem 4rem;
+  font-family: var(--vt);
+  font-size: 1.2rem;
+  color: var(--text2);
+  line-height: 1.6;
+  letter-spacing: 0.5px;
+}
+.boss-card.open .boss-detail { display: block; }
+
+.move-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 0.6rem;
+}
+.move-list li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.5rem 0.8rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--pixel);
+}
+.move-list li::before {
+  content: '►';
+  font-family: var(--pixel-font);
+  font-size: 0.45rem;
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+}
+.crit .move-list li::before { color: var(--neon-pink); }
+.major .move-list li::before { color: var(--neon-orange); }
+.minor .move-list li::before { color: var(--neon-cyan); }
+
+/* ── ALERT BOX ── */
+.pixel-alert {
+  border: 2px solid;
+  padding: 1rem 1.2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+.pixel-alert::before {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px; right: 3px; bottom: 3px;
+  border: 1px solid;
+  opacity: 0.2;
+  pointer-events: none;
+}
+.pixel-alert.red { border-color: var(--neon-pink); background: rgba(255,45,120,0.08); }
+.pixel-alert.red::before { border-color: var(--neon-pink); }
+.pixel-alert.green { border-color: var(--neon-green); background: rgba(57,255,20,0.05); }
+.pixel-alert.green::before { border-color: var(--neon-green); }
+.pixel-alert.cyan { border-color: var(--neon-cyan); background: rgba(0,245,255,0.05); }
+.pixel-alert.cyan::before { border-color: var(--neon-cyan); }
+.pixel-alert.yellow { border-color: var(--neon-yellow); background: rgba(255,230,0,0.06); }
+.pixel-alert.yellow::before { border-color: var(--neon-yellow); }
+.pixel-alert.orange { border-color: var(--neon-orange); background: rgba(255,107,0,0.08); }
+.pixel-alert.orange::before { border-color: var(--neon-orange); }
+.alert-icon { font-size: 1.5rem; flex-shrink: 0; }
+.alert-title {
+  font-family: var(--pixel-font);
+  font-size: 0.5rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.6;
+  letter-spacing: 0.5px;
+}
+.red .alert-title { color: var(--neon-pink); }
+.green .alert-title { color: var(--neon-green); }
+.cyan .alert-title { color: var(--neon-cyan); }
+.yellow .alert-title { color: var(--neon-yellow); }
+.orange .alert-title { color: var(--neon-orange); }
+.alert-body { font-family: var(--vt); font-size: 1.15rem; color: var(--text2); line-height: 1.55; letter-spacing: 0.5px; }
+
+/* ── CAT CHIPS ── */
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+}
+.cat-chip {
+  background: var(--panel);
+  border: 2px solid var(--pixel);
+  padding: 0.65rem 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  transition: all 0.1s;
+  cursor: default;
+}
+.cat-chip:hover { transform: translateY(-2px); }
+.cat-chip-name { font-family: var(--vt); font-size: 1.1rem; color: var(--text); letter-spacing: 1px; }
+.cat-chip-score { font-family: var(--pixel-font); font-size: 0.55rem; }
+.cat-chip.perfect { border-color: var(--neon-green); box-shadow: 0 0 8px rgba(57,255,20,0.2); }
+.cat-chip.perfect .cat-chip-score { color: var(--neon-green); text-shadow: 0 0 6px var(--neon-green); }
+.cat-chip.needs { border-color: var(--neon-orange); }
+.cat-chip.needs .cat-chip-score { color: var(--neon-orange); }
+.cat-chip.fail { border-color: var(--neon-pink); box-shadow: 0 0 8px rgba(255,45,120,0.15); }
+.cat-chip.fail .cat-chip-score { color: var(--neon-pink); text-shadow: 0 0 6px var(--neon-pink); }
+
+/* ── TROPHY CARDS / WIN CARDS ── */
+.trophy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.trophy-card {
+  background: var(--panel);
+  border: 2px solid var(--neon-green);
+  padding: 1.2rem;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.1s;
+}
+.trophy-card:hover { transform: translateY(-3px); }
+.trophy-card::after {
+  content: '';
+  position: absolute;
+  bottom: -20px; right: -20px;
+  width: 80px; height: 80px;
+  background: radial-gradient(circle, rgba(57,255,20,0.1) 0%, transparent 70%);
+}
+.trophy-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--neon-green);
+  box-shadow: 0 0 10px var(--neon-green);
+}
+.trophy-emoji { font-size: 2rem; margin-bottom: 0.5rem; display: block; }
+.trophy-title { font-family: var(--pixel-font); font-size: 0.5rem; color: var(--neon-green); margin-bottom: 0.3rem; line-height: 1.8; text-shadow: 0 0 8px var(--neon-green); letter-spacing: 0.5px; }
+.trophy-score { font-family: var(--vt); font-size: 1.1rem; color: var(--text3); margin-bottom: 0.6rem; letter-spacing: 2px; }
+.trophy-body { font-family: var(--vt); font-size: 1.15rem; color: var(--text2); line-height: 1.6; letter-spacing: 0.5px; }
+
+/* ── LEADERBOARD ── */
+.leaderboard {
+  background: var(--panel);
+  border: 3px solid var(--neon-yellow);
+  box-shadow: 0 0 20px rgba(255,230,0,0.2), inset 0 0 20px rgba(255,230,0,0.03);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.lb-title {
+  font-family: var(--pixel-font);
+  font-size: 0.7rem;
+  color: var(--neon-yellow);
+  text-align: center;
+  text-shadow: 0 0 10px var(--neon-yellow);
+  margin-bottom: 1.2rem;
+  letter-spacing: 2px;
+}
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.lb-row:last-child { border-bottom: none; }
+.lb-rank { font-family: var(--pixel-font); font-size: 0.6rem; color: var(--text3); width: 24px; flex-shrink: 0; }
+.lb-rank.gold { color: var(--neon-yellow); text-shadow: 0 0 6px var(--neon-yellow); }
+.lb-rank.silver { color: #ccc; }
+.lb-rank.bronze { color: var(--neon-orange); }
+.lb-name { font-family: var(--vt); font-size: 1.3rem; flex: 1; color: var(--text); letter-spacing: 2px; }
+.lb-score {
+  font-family: var(--pixel-font);
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+}
+.lb-score.green { color: var(--neon-green); text-shadow: 0 0 6px var(--neon-green); }
+.lb-score.yellow { color: var(--neon-yellow); }
+.lb-score.pink { color: var(--neon-pink); }
+.lb-score.orange { color: var(--neon-orange); }
+.lb-bar-wrap { width: 80px; height: 8px; background: var(--pixel); flex-shrink: 0; }
+.lb-bar { height: 8px; }
+
+/* ── TIMELINE ── */
+.arcade-timeline { position: relative; padding-left: 2.5rem; }
+.arcade-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.7rem;
+  top: 1.5rem;
+  bottom: 1.5rem;
+  width: 3px;
+  background: repeating-linear-gradient(180deg, var(--neon-cyan) 0px, var(--neon-cyan) 6px, transparent 6px, transparent 12px);
+  opacity: 0.5;
+}
+.tl-item { position: relative; padding-bottom: 2.5rem; }
+.tl-item:last-child { padding-bottom: 0; }
+.tl-dot {
+  position: absolute;
+  left: -1.8rem;
+  top: 0.4rem;
+  width: 16px;
+  height: 16px;
+  border: 2px solid;
+  background: var(--bg);
+}
+.tl-item.tpass .tl-dot { border-color: var(--neon-green); background: var(--neon-green); box-shadow: 0 0 10px var(--neon-green); }
+.tl-item.tfail .tl-dot { border-color: var(--neon-pink); background: var(--neon-pink); box-shadow: 0 0 10px var(--neon-pink); }
+.tl-item.twarn .tl-dot { border-color: var(--neon-orange); background: var(--neon-orange); box-shadow: 0 0 10px var(--neon-orange); }
+
+.tl-date { font-family: var(--pixel-font); font-size: 0.42rem; color: var(--text3); margin-bottom: 0.3rem; letter-spacing: 1px; }
+.tl-score { font-family: var(--pixel-font); font-size: 1.8rem; line-height: 1; margin-bottom: 0.4rem; }
+.tpass .tl-score { color: var(--neon-green); text-shadow: 0 0 15px var(--neon-green); }
+.tfail .tl-score { color: var(--neon-pink); text-shadow: 0 0 15px var(--neon-pink); }
+.twarn .tl-score { color: var(--neon-orange); text-shadow: 0 0 15px var(--neon-orange); }
+.tl-status {
+  font-family: var(--pixel-font);
+  font-size: 0.42rem;
+  padding: 3px 10px;
+  display: inline-block;
+  margin-bottom: 1rem;
+  border: 1px solid;
+  letter-spacing: 1px;
+}
+.tpass .tl-status { color: var(--neon-green); border-color: var(--neon-green); background: rgba(57,255,20,0.1); }
+.tfail .tl-status { color: var(--neon-pink); border-color: var(--neon-pink); background: rgba(255,45,120,0.1); }
+.twarn .tl-status { color: var(--neon-orange); border-color: var(--neon-orange); background: rgba(255,107,0,0.1); }
+
+.tl-finds { display: flex; flex-direction: column; gap: 5px; }
+.tl-find {
+  background: var(--panel2);
+  border-left: 3px solid;
+  padding: 0.5rem 0.8rem;
+  font-family: var(--vt);
+  font-size: 1.1rem;
+  color: var(--text2);
+  display: flex;
+  gap: 0.6rem;
+  letter-spacing: 0.5px;
+}
+.tl-find.fc { border-color: var(--neon-pink); }
+.tl-find.fm { border-color: var(--neon-orange); }
+.tl-find.fn { border-color: var(--neon-cyan); }
+.tl-ft {
+  font-family: var(--pixel-font);
+  font-size: 0.35rem;
+  flex-shrink: 0;
+  padding: 2px 5px;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+.fc .tl-ft { background: rgba(255,45,120,0.2); color: var(--neon-pink); }
+.fm .tl-ft { background: rgba(255,107,0,0.2); color: var(--neon-orange); }
+.fn .tl-ft { background: rgba(0,245,255,0.15); color: var(--neon-cyan); }
+
+/* ── REPEAT TABLE ── */
+.repeat-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+.repeat-table th {
+  font-family: var(--pixel-font);
+  font-size: 0.38rem;
+  letter-spacing: 0.12em;
+  color: var(--text3);
+  padding: 0 0.8rem 0.5rem;
+  text-align: left;
+}
+.repeat-table td {
+  padding: 0.9rem 0.8rem;
+  background: var(--panel);
+  font-family: var(--vt);
+  font-size: 1.1rem;
+  color: var(--text2);
+  vertical-align: top;
+  border-top: 1px solid var(--pixel);
+  border-bottom: 1px solid var(--pixel);
+  letter-spacing: 0.5px;
+}
+.repeat-table td:first-child { border-left: 1px solid var(--pixel); }
+.repeat-table td:last-child { border-right: 1px solid var(--pixel); }
+.repeat-table tr:hover td { background: var(--panel2); }
+.r-name { font-family: var(--pixel-font); font-size: 0.48rem; color: var(--text); margin-bottom: 0.4rem; line-height: 1.8; letter-spacing: 0.5px; }
+.r-sub { font-family: var(--vt); font-size: 1rem; color: var(--text3); line-height: 1.5; }
+
+.ap {
+  display: inline-block;
+  font-family: var(--pixel-font);
+  font-size: 0.35rem;
+  padding: 3px 7px;
+  margin: 2px;
+  border: 1px solid;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+.ap-crit { background: rgba(255,45,120,0.15); color: var(--neon-pink); border-color: rgba(255,45,120,0.4); }
+.ap-major { background: rgba(255,107,0,0.15); color: var(--neon-orange); border-color: rgba(255,107,0,0.4); }
+.ap-minor { background: rgba(0,245,255,0.1); color: var(--neon-cyan); border-color: rgba(0,245,255,0.3); }
+.ap-pass { background: rgba(57,255,20,0.1); color: var(--neon-green); border-color: rgba(57,255,20,0.3); }
+
+/* ── DATA TABLE ── */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+}
+.data-table th {
+  font-family: var(--pixel-font);
+  font-size: 0.38rem;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+  padding: 0 0.8rem 0.5rem;
+  text-align: left;
+}
+.data-table td {
+  padding: 0.65rem 0.8rem;
+  background: var(--panel);
+  font-family: var(--vt);
+  font-size: 1.1rem;
+  color: var(--text2);
+  letter-spacing: 1px;
+}
+.data-table td:first-child { border-left: 2px solid var(--pixel); }
+.data-table tr:hover td { background: var(--panel2); }
+.td-name { color: var(--text); font-size: 1.15rem; }
+
+/* ── QUOTE / SPEECH BUBBLE ── */
+.speech-bubble {
+  background: var(--panel2);
+  border: 2px solid var(--neon-green);
+  padding: 1.2rem 1.5rem;
+  position: relative;
+  margin: 1rem 0;
+  box-shadow: 0 0 15px rgba(57,255,20,0.15);
+}
+.speech-bubble::before {
+  content: '"';
+  font-family: var(--pixel-font);
+  font-size: 2rem;
+  color: var(--neon-green);
+  position: absolute;
+  top: -1rem;
+  left: 1rem;
+  text-shadow: 0 0 10px var(--neon-green);
+}
+.speech-text { font-family: var(--vt); font-size: 1.3rem; color: var(--text); line-height: 1.6; letter-spacing: 1px; margin-bottom: 0.4rem; }
+.speech-attr { font-family: var(--pixel-font); font-size: 0.42rem; color: var(--text3); letter-spacing: 1px; }
+
+/* ── PBAR ── */
+.pbar-item { margin-bottom: 1.2rem; }
+.pbar-head { display: flex; justify-content: space-between; margin-bottom: 0.4rem; }
+.pbar-name { font-family: var(--vt); font-size: 1.2rem; color: var(--text); letter-spacing: 1px; }
+.pbar-val { font-family: var(--pixel-font); font-size: 0.55rem; }
+.pbar-track {
+  height: 16px;
+  background: var(--panel2);
+  border: 2px solid var(--pixel);
+  position: relative;
+  overflow: hidden;
+}
+.pbar-fill {
+  height: 100%;
+  transition: width 1.2s cubic-bezier(0.34,1.56,0.64,1);
+  position: relative;
+}
+.pbar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,0.15) 0px, rgba(255,255,255,0.15) 8px, transparent 8px, transparent 16px);
+}
+.pbar-sub { font-family: var(--vt); font-size: 1rem; color: var(--text3); margin-top: 0.25rem; letter-spacing: 1px; }
+
+/* ── PATTERN CARDS ── */
+.pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+.pattern-card {
+  background: var(--panel);
+  border: 2px solid var(--neon-orange);
+  padding: 1.2rem;
+  box-shadow: 0 0 10px rgba(255,107,0,0.15);
+  position: relative;
+}
+.pattern-card::before {
+  content: attr(data-num);
+  position: absolute;
+  top: -1px; right: 10px;
+  font-family: var(--pixel-font);
+  font-size: 0.4rem;
+  background: var(--neon-orange);
+  color: #000;
+  padding: 2px 8px;
+  letter-spacing: 1px;
+}
+.pattern-icon { font-size: 1.8rem; margin-bottom: 0.5rem; display: block; }
+.pattern-title { font-family: var(--pixel-font); font-size: 0.48rem; color: var(--neon-orange); margin-bottom: 0.5rem; line-height: 1.8; text-shadow: 0 0 8px var(--neon-orange); }
+.pattern-body { font-family: var(--vt); font-size: 1.15rem; color: var(--text2); line-height: 1.6; letter-spacing: 0.5px; }
+
+/* ── CHEAT CODE BOX ── */
+.cheat-box {
+  background: var(--panel);
+  border: 3px solid var(--neon-purple);
+  box-shadow: 0 0 20px rgba(191,95,255,0.2);
+  padding: 1.5rem;
+}
+.cheat-title {
+  font-family: var(--pixel-font);
+  font-size: 0.6rem;
+  color: var(--neon-purple);
+  text-shadow: 0 0 10px var(--neon-purple);
+  margin-bottom: 1rem;
+  letter-spacing: 2px;
+}
+.cheat-list { display: flex; flex-direction: column; gap: 6px; }
+.cheat-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 0.6rem 0.9rem;
+  background: rgba(191,95,255,0.06);
+  border: 1px solid rgba(191,95,255,0.2);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.cheat-item:hover { background: rgba(191,95,255,0.12); transform: translateX(4px); }
+.cheat-item.done { opacity: 0.5; }
+.cheat-item.done .cheat-text { text-decoration: line-through; }
+.cheat-key {
+  font-family: var(--pixel-font);
+  font-size: 0.5rem;
+  background: var(--neon-purple);
+  color: #000;
+  padding: 3px 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+.cheat-item.done .cheat-key { background: var(--neon-green); }
+.cheat-text {
+  font-family: var(--vt);
+  font-size: 1.15rem;
+  color: var(--text);
+  line-height: 1.5;
+  letter-spacing: 0.5px;
+}
+.cheat-crit {
+  font-family: var(--pixel-font);
+  font-size: 0.35rem;
+  background: var(--neon-pink);
+  color: #000;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.progress-wrap { margin-bottom: 1rem; }
+.progress-label { font-family: var(--pixel-font); font-size: 0.42rem; color: var(--text3); margin-bottom: 0.4rem; letter-spacing: 1px; display: flex; justify-content: space-between; }
+.progress-track { height: 12px; background: var(--panel2); border: 2px solid var(--pixel); }
+.progress-fill { height: 100%; background: var(--neon-purple); box-shadow: 0 0 8px var(--neon-purple); transition: width 0.4s ease; position: relative; }
+.progress-fill::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.15) 0px, rgba(255,255,255,0.15) 8px, transparent 8px, transparent 16px); }
+
+/* ── ANIMATIONS ── */
+.fade-in { opacity: 0; transform: translateY(16px); transition: opacity 0.4s ease, transform 0.4s ease; }
+.fade-in.visible { opacity: 1; transform: none; }
+
+@keyframes pixel-glow {
+  0%,100% { text-shadow: 0 0 10px currentColor; }
+  50% { text-shadow: 0 0 20px currentColor, 0 0 40px currentColor; }
+}
+
+.glow { animation: pixel-glow 2s ease-in-out infinite; }
+
+@media (max-width: 700px) {
+  .section { padding: 1.5rem 1rem; }
+  .pixel-hero { padding: 2rem 1rem 1.5rem; }
+  .score-strip { grid-template-columns: 1fr 1fr; }
+  .nav-logo { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="arcade-nav">
+  <div class="nav-logo">A26<br>ARCADE</div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-page="ua" onclick="gotoPage('ua')">🎮 BOSS FIGHT</div>
+    <div class="nav-tab" data-page="eha" onclick="gotoPage('eha')">📺 ROUND HISTORY</div>
+    <div class="nav-tab" data-page="wins" onclick="gotoPage('wins')">🏆 HIGH SCORES</div>
+    <div class="nav-tab" data-page="repeat" onclick="gotoPage('repeat')">🔁 CONTINUES USED</div>
+    <div class="nav-tab" data-page="escalate" onclick="gotoPage('escalate')">⚡ LEVEL UP DANGER</div>
+    <div class="nav-tab" data-page="cheats" onclick="gotoPage('cheats')">🕹️ CHEAT CODES</div>
+  </div>
+</nav>
+
+
+<!-- ═══════════════════════════ PAGE 1: UA = BOSS FIGHT ═══ -->
+<div class="page active" id="page-ua">
+
+  <div class="pixel-hero">
+    <div class="insert-coin">▶ INSERT COIN TO CONTINUE ◀</div>
+    <div class="hero-pixel-title">
+      <span style="color:var(--neon-pink)">FINAL</span><br>
+      <span style="color:var(--neon-yellow)">BOSS</span><br>
+      <span style="color:var(--neon-cyan)">FIGHT</span>
+    </div>
+    <div class="hero-sub">The UA Audit. The one that matters.<br>Beat this and the whole team wins. 🎮</div>
+    <div class="press-start">TARGET: 98% — PLAYER 1 IS READY</div>
+  </div>
+
+  <div class="section fade-in">
+    <div class="section-label">📊 CURRENT STATS</div>
+    <div class="score-strip">
+      <div class="score-block">
+        <div class="score-label">LAST SCORE</div>
+        <div class="score-val pink-val">78%</div>
+        <div class="score-sub">DEC 2025 — GAME OVER</div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">LAST SCORE</div>
+        <div class="score-val yellow-val">109</div>
+        <div class="score-sub">OUT OF 138</div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">MIN TO PASS</div>
+        <div class="score-val green-val">125</div>
+        <div class="score-sub">90% THRESHOLD</div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">REMAINING BUDGET</div>
+        <div class="score-val" style="color:var(--neon-orange);text-shadow:0 0 10px var(--neon-orange)">10 PTS</div>
+        <div class="score-sub">CAN STILL LOSE & PASS</div>
+      </div>
+    </div>
+
+    <div class="pixel-alert red">
+      <div class="alert-icon">⚠️</div>
+      <div>
+        <div class="alert-title">THE MATH — 125 TO PASS. FLIES COST 3. 10 POINTS LEFT TO LOSE.</div>
+        <div class="alert-body">Pass threshold is 90% = 125 out of 138 points. Flies are an unavoidable −3 due to kitchen location. That leaves 135 points available and a remaining loss budget of exactly 10 points across every other category. The December audit lost 26 points outside of flies. We need to cut that down to 10. Fix the repeat violations and that number is very reachable.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CRITICAL BOSS PHASES -->
+  <div class="section fade-in">
+    <div class="section-label">💀 CRITICAL — THE FINAL BOSS'S TWO HARDEST ATTACKS</div>
+    <div class="boss-list">
+
+      <div class="boss-card crit" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">1</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:100%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">CRITICAL — 0/3 PTS — PEST CONTROL — ACTIVE IN ALL 4 AUDITS</div>
+            <div class="boss-name">🦟 THE FLY BOSS — Hasn't been defeated yet. Count went UP.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          The fly boss appeared in ALL FOUR audits — UA December, EHA February, March, AND April. The count went from 5 to 6. This boss keeps leveling up because the root cause hasn't been fixed: dirty floor drains and standing water. You can't trap your way out of a harborage problem.
+          <ul class="move-list">
+            <li>Call pest control for an unscheduled targeted visit — bar area and dish room specifically. Not a routine visit.</li>
+            <li>Floor drains must be cleaned DAILY — not weekly. Bar drain, beverage station drain, dish room drain. This is the boss spawn point.</li>
+            <li>Find and eliminate the standing water under the 3rd floor bar. Mopping is not a fix. Trace the source.</li>
+            <li>Add a UV light trap in the bar area — the auditor has recommended this 3 times now</li>
+            <li>Use electric fly wand or vacuum during every closed-hours period</li>
+            <li>Pest control binder must be complete: contract, insurance proof, device map, sighting log, service reports, SDS sheets, operator license, pesticide log</li>
+            <li>Pest devices must be flush to the wall — after cleaning under equipment, push them back immediately</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="boss-card crit" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">2</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:100%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">CRITICAL — 0/3 PTS — CALIBRATION RECORDS</div>
+            <div class="boss-name">📋 THE ZERO RECORDS BOSS — Not a single doc existed. Most fixable Critical on the list.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          Zero calibration records for any thermometer, gauge, or scale. Not incomplete — literally none. This is the easiest Critical to defeat and would be the most embarrassing to let happen again.
+          <ul class="move-list">
+            <li>Calibrate every pocket thermometer, cooler/freezer thermometer, dish machine thermometer, and scale</li>
+            <li>Document each one: device name, date, result, person performing — must be traceable to NIST</li>
+            <li>Records must be accessible in under 60 seconds — auditor will ask for them immediately</li>
+            <li>Thermometer probes stored in a clean dedicated container — nothing else inside, no loose items</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MAJOR PHASES -->
+  <div class="section fade-in">
+    <div class="section-label">🟠 MAJOR — BOSS PHASE 2 ATTACKS</div>
+    <div class="boss-list">
+
+      <div class="boss-card major" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">3</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MAJOR — 1/3 PTS — FOOD STORAGE</div>
+            <div class="boss-name">❄️ Ice buildup in walk-in freezer and espresso milk fridge</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          Ice buildup means the unit can't maintain required temperature. That's an immediate storage compliance failure.
+          <ul class="move-list">
+            <li>Defrost walk-in freezer — document the process and verify temperature after</li>
+            <li>Defrost milk fridge for espresso machine — add to the weekly cleaning schedule</li>
+            <li>All units: freezer ≤0°F, refrigeration ≤41°F — verify AM and PM on Plumsense every day</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="boss-card major" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">4</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MAJOR — 1/3 PTS — PRODUCT LABELING</div>
+            <div class="boss-name">🏷️ Expired oranges. No receive dates. Unlabeled bar items.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          Labeling is the most commonly failed area across all FLIK clubs. A26 has been strong in EHA — but the UA audit found real violations. This is also driving the $24K food safety waste problem.
+          <ul class="move-list">
+            <li>Walk every shelf before inspection — dry storage, walk-in, freezer, bar — pull anything expired, no exceptions</li>
+            <li>Every open or decanted item needs TWO dates: use-by date AND received-on date</li>
+            <li>Bar items that MUST be labeled: citrus fruits, sauces, condiments, concentrates, honey, garlic, spices</li>
+            <li>When decanting, copy the received-on date to the new container immediately</li>
+            <li>Re-labeling to extend expiration is STRICTLY PROHIBITED — automatic finding</li>
+            <li>Open bags into a cambro with lid and label — tying shut does not count</li>
+            <li>Defrost labels required on any item moved from freezer to fridge</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="boss-card major" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">5</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MAJOR — 1/3 PTS — TAC LOGS</div>
+            <div class="boss-name">📋 TAC logs missing initials, discard times, and hot foods. Manager verified incomplete logs.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          Logs existed but weren't filled out right — and a manager signed them anyway. That's a double violation.
+          <ul class="move-list">
+            <li>Every TAC entry needs: time removed from temp control, ACTUAL discard time, disposition (sold / discarded / wasted), initials, manager verification</li>
+            <li>HOT FOODS must be on TAC logs — specifically cited as missing</li>
+            <li>Manager signs ONLY when the log is completely and correctly filled out</li>
+            <li>Projected discard times are never acceptable — actual time only</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="boss-card major" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">6</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:33%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MAJOR — 2/6 PTS — SANITATION PROGRAM</div>
+            <div class="boss-name">🧹 Oven side dirty. Food debris on ceiling tiles. Gaskets. Mop face-down in bucket. Cleaning schedule not being completed.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          Multiple surfaces, multiple failures — and the cleaning schedule was not being followed. Tasks were assigned but not getting done.
+          <ul class="move-list">
+            <li>Oven side and back wall — wipe down daily, named person responsible — daily task</li>
+            <li>Ceiling tiles above prep table — food debris means splatter is reaching the ceiling. Clean tiles, address the splatter source.</li>
+            <li>Gaskets under coffee machine fridge — on the regular cleaning schedule</li>
+            <li>Soap bucket must be labeled with chemical name — every chemical container requires a label</li>
+            <li>Mop heads stored hanging vertically to air-dry — never face-down in bucket</li>
+            <li>Cleaning schedule must be completed and signed off every single day — no blank days</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="boss-card major" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">7</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MAJOR — 1/3 PTS — FACILITY INFRASTRUCTURE</div>
+            <div class="boss-name">🔩 Damaged caulking, ceiling tiles, flooring, and gasket on Refrigerator 5</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          All maintenance items — report in writing, escalate if not repaired within 5 business days.
+          <ul class="move-list">
+            <li>Caulking at 3-comp sink wall attachment — deteriorating, creates water pooling (fly harborage). Report to maintenance now.</li>
+            <li>Caulking to right of coffee machine — same issue, same urgency</li>
+            <li>Ceiling tiles above food prep table — damaged, not cleanable. Repair or replace.</li>
+            <li>Flooring and wall corner by downstairs prep area — document and escalate</li>
+            <li>Gasket on Refrigerator 5 — broken. Replace immediately. Broken gasket = unit can't hold temp.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MINOR = EASY POINTS DON'T GIVE AWAY -->
+  <div class="section fade-in">
+    <div class="section-label">🔵 MINORS LAST TIME — FAIL AGAIN AND THEY BECOME MAJORS</div>
+    <div class="boss-list">
+
+      <div class="boss-card minor" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">8</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MINOR — RECEIVING TEMP LOG</div>
+            <div class="boss-name">🐔 Chicken breast logged as N/A on temp log. Only log what actually arrived.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">Only four categories require a temperature log at receiving: Poultry, Pork, Dairy, and Frozen. If one of those items did not come in on that delivery, leave the log blank — do not write N/A. The finding here was that chicken breast arrived and WAS logged, but the temperature was written as N/A instead of the actual reading. When one of those four categories comes in, take the actual temperature and log it. Poultry must arrive at ≤41°F. If it arrives over temp, reject the shipment and document the rejection.</div>
+      </div>
+
+      <div class="boss-card minor" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">9</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MINOR — UTENSILS & EQUIPMENT</div>
+            <div class="boss-name">🍽️ Utensils stored upright. Chipped plastic on bowls. Thermometer stored unsanitary.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          <ul class="move-list">
+            <li>Clean utensils stored face-DOWN — upright exposes the food-contact end to contamination</li>
+            <li>Any bowl with chipping plastic gets discarded immediately — foreign material risk, no exceptions</li>
+            <li>Thermometer probe stored in a clean dedicated container — nothing else inside</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="boss-card minor" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">10</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:33%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MINOR — CUTTING BOARDS</div>
+            <div class="boss-name">🔪 Deep scores in cutting boards. Not cleanable. Order replacements NOW.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">Deep grooves harbor bacteria and can't be sanitized. Replace before inspection day — not inspection morning. Color-code for raw vs cooked.</div>
+      </div>
+
+      <div class="boss-card minor" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">11</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MINOR — BAR SANITIZER</div>
+            <div class="boss-name">🧪 Bar 3-comp sink sanitizer PPM was ESTIMATED not tested. Auditor will test it themselves.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">Auditor tests concentration themselves and compares to your records. If you estimated and they get a different number, that can become a falsified record finding — far worse. Test with strips every shift, log the actual reading. Target: 400 PPM QUATS. Dish machine logs need AM AND PM entries — not just one per day.</div>
+      </div>
+
+      <div class="boss-card minor" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">12</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:33%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MINOR — ICE BUCKETS + ICE MACHINE</div>
+            <div class="boss-name">🪣 Ice buckets stored UPRIGHT at bar. Calcium buildup in ice machine. Ice scoop inside bin.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">
+          <ul class="move-list">
+            <li>🪣 Ice buckets ALWAYS stored UPSIDE DOWN when not in use — upright allows debris to settle inside. Check every opening walk.</li>
+            <li>Ice scoop stored OUTSIDE the machine in a clean protected location — never inside the bin</li>
+            <li>3rd floor bar ice machine had calcium accumulation close to falling into ice — descale now, add monthly descaling to the bar cleaning schedule</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="boss-card minor" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">13</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MINOR — LOG INK COLOR</div>
+            <div class="boss-name">🖊️ Red ink used on logs. Black or blue ONLY. Remove every red pen from the kitchen right now.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">This is the single most preventable finding on the entire list. FLIK and UA requirement — black or blue ink only. Remove all red pens from the kitchen today. If someone doesn't have a pen, give them one.</div>
+      </div>
+
+      <div class="boss-card minor" onclick="toggleCard(this)">
+        <div class="boss-head">
+          <div class="boss-hp">
+            <div class="boss-num">14</div>
+            <div class="hp-bar-wrap"><div class="hp-bar" style="width:66%"></div></div>
+          </div>
+          <div class="boss-body">
+            <div class="boss-tag">MINOR — COFFEE FILTERS</div>
+            <div class="boss-name">☕ Coffee filters stored upright and uncovered. Store UPSIDE DOWN with lid on top.</div>
+          </div>
+          <div class="boss-chevron">▶</div>
+        </div>
+        <div class="boss-detail">Filter faces DOWN, rim faces UP, lid covers the opening. Prevents airborne contaminants from settling into the filter basket. Takes 2 seconds to check every opening walk. No excuse to miss this one.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- UA Category Chips -->
+  <div class="section fade-in">
+    <div class="section-label">🗺️ FULL MAP — ALL UA CATEGORIES</div>
+    <div class="cat-grid">
+      <div class="cat-chip perfect"><span class="cat-chip-name">Management & Personnel</span><span class="cat-chip-score">12/12</span></div>
+      <div class="cat-chip fail"><span class="cat-chip-name">Food Storage</span><span class="cat-chip-score">1/3</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Thawing</span><span class="cat-chip-score">3/3</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Produce Wash</span><span class="cat-chip-score">3/3</span></div>
+      <div class="cat-chip fail"><span class="cat-chip-name">Product Labeling</span><span class="cat-chip-score">1/3</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Food Preparation</span><span class="cat-chip-score">3/3</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Cooking</span><span class="cat-chip-score">3/3</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Reheating</span><span class="cat-chip-score">3/3</span></div>
+      <div class="cat-chip fail"><span class="cat-chip-name">Hot & Cold Holding</span><span class="cat-chip-score">4/6</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Chilling / Cooling</span><span class="cat-chip-score">3/3</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Allergen Management</span><span class="cat-chip-score">3/3</span></div>
+      <div class="cat-chip needs"><span class="cat-chip-name">Foreign Material</span><span class="cat-chip-score">5/6</span></div>
+      <div class="cat-chip needs"><span class="cat-chip-name">Ice Making</span><span class="cat-chip-score">5/6</span></div>
+      <div class="cat-chip fail"><span class="cat-chip-name">Equip., Utensils, Linens</span><span class="cat-chip-score">3/9</span></div>
+      <div class="cat-chip fail"><span class="cat-chip-name">Sanitation — Facility</span><span class="cat-chip-score">2/6</span></div>
+      <div class="cat-chip needs"><span class="cat-chip-name">Dish Machines / 3-Comp</span><span class="cat-chip-score">8/9</span></div>
+      <div class="cat-chip fail"><span class="cat-chip-name">Pest Control (IPM)</span><span class="cat-chip-score">0/3</span></div>
+      <div class="cat-chip needs"><span class="cat-chip-name">Water & Plumbing</span><span class="cat-chip-score">13/15</span></div>
+      <div class="cat-chip needs"><span class="cat-chip-name">Construction & Maintenance</span><span class="cat-chip-score">6/9</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Restrooms & HWS</span><span class="cat-chip-score">6/6</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Toxic Materials</span><span class="cat-chip-score">9/9</span></div>
+      <div class="cat-chip needs"><span class="cat-chip-name">Training & Records</span><span class="cat-chip-score">5/6</span></div>
+      <div class="cat-chip perfect"><span class="cat-chip-name">Buffet Labeling</span><span class="cat-chip-score">3/3</span></div>
+    </div>
+  </div>
+
+</div><!-- end UA page -->
+
+
+<!-- ═══════════════════════════ PAGE 2: EHA = ROUND HISTORY ═══ -->
+<div class="page" id="page-eha">
+
+  <div class="pixel-hero">
+    <div class="insert-coin">▶ CHECKING SAVE DATA ◀</div>
+    <div class="hero-pixel-title">
+      <span style="color:var(--neon-cyan)">ROUND</span><br>
+      <span style="color:var(--neon-yellow)">HISTORY</span>
+    </div>
+    <div class="hero-sub">3 rounds played. Here's what happened and what we learned.</div>
+    <div class="press-start" style="background:var(--neon-cyan);color:#000">NET TREND: +6.33 PTS OVER 3 ROUNDS</div>
+  </div>
+
+  <div class="section fade-in">
+    <div class="section-label">📺 ROUND SCORES</div>
+    <div class="score-strip">
+      <div class="score-block">
+        <div class="score-label">ROUND 1 — FEB 27</div>
+        <div class="score-val orange-val">91.46%</div>
+        <div class="score-sub">EHA — MEETS EXPECTATIONS</div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">ROUND 2 — MAR 24</div>
+        <div class="score-val pink-val">89.24%</div>
+        <div class="score-sub">EHA — REAUDIT REQUIRED</div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">ROUND 3 — APR 14</div>
+        <div class="score-val green-val">95.57%</div>
+        <div class="score-sub">EHA — MEETS EXPECTATIONS</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="section fade-in">
+    <div class="section-label">🕹️ PLAY-BY-PLAY — ALL 3 ROUNDS</div>
+    <div class="arcade-timeline">
+
+      <div class="tl-item twarn">
+        <div class="tl-dot"></div>
+        <div class="tl-date">EHA ROUND 1 — FEB 27, 2026</div>
+        <div class="tl-score">91.46%</div>
+        <div class="tl-status">CLEARED — EHA — MEETS EXPECTATIONS</div>
+        <div class="tl-finds">
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Flies 5+ in bar and dish room — 0 pest control points</div>
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Raw chicken stored ABOVE RTE vegetables in walk-in — hierarchy violation</div>
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Walk-in Plumsense log — PM entry missing on 2/20</div>
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Dish machine logs — incomplete 3+ days, only validated once daily (AM + PM both required)</div>
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Cooling logs — 2 days missing cool-down temps for Sausage Gravy (2/19 and 2/20)</div>
+          <div class="tl-find fm"><span class="tl-ft">MAJOR</span>Ice at bar ice bin contaminated with olive — ice must stay covered</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Food rack stored UNDER pest light trap — contamination risk</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Wet stacking — food containers stacked before fully air-dried</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Thermometer missing from 2 hot boxes</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Floor drains soiled — fly harborage conditions</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Lighting inadequate or not properly shielded</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Caulking deteriorating at 3-comp sink wall attachment</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Coffee dispenser underside — soilage accumulation building up</div>
+        </div>
+      </div>
+
+      <div class="tl-item tfail">
+        <div class="tl-dot"></div>
+        <div class="tl-date">EHA ROUND 2 — MAR 24, 2026</div>
+        <div class="tl-score">89.24%</div>
+        <div class="tl-status">GAME OVER — EHA — REAUDIT REQUIRED</div>
+        <div class="tl-finds">
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Flies 5+ in bar — same boss, same spawn point, not defeated</div>
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Production logs — 3+ days missing manager verification and date in prior month</div>
+          <div class="tl-find fm"><span class="tl-ft">MAJOR</span>3rd floor bar ice machine — calcium buildup close to falling into ice. Removed from service.</div>
+          <div class="tl-find fm"><span class="tl-ft">MAJOR</span>TAC logs — missing manager verification, missing end time stamps on several entries</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Ice machine interior/bins soiled with hard water buildup</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Cardboard boxes of food AND wrap boxes on prep table top</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Wooden clipboards in kitchen — not allowed, not cleanable</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Fan covers in reach-in and walk-in — dust accumulation</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Food debris in cabinet. Hot box floor dirty. Debris behind Coke freestyle machine.</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Water pooled under 3rd floor bar. Bar and beverage station floor drains soiled.</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Caulking at dish machine drain board pre-wash side — deteriorating</div>
+        </div>
+      </div>
+
+      <div class="tl-item tpass">
+        <div class="tl-dot"></div>
+        <div class="tl-date">EHA ROUND 3 — APR 14, 2026</div>
+        <div class="tl-score">95.57%</div>
+        <div class="tl-status">CLEARED — BEST SCORE YET</div>
+        <div class="tl-finds">
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Flies 6+ in dish room, kitchen, AND bar — count went UP. Still not defeated.</div>
+          <div class="tl-find fc"><span class="tl-ft">CRIT</span>Plumsense — FOH fridge/freezer logs missing or incomplete MOST days in the prior 2 weeks</div>
+          <div class="tl-find fm"><span class="tl-ft">MAJOR</span>Water buildup and soilage under bar counter and 3-comp sink — active fly harborage</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Ceiling tiles in various kitchen locations — damaged, not easily cleanable</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Silicone seal at dish machine drain board pre-wash side — still deteriorating (same as Feb)</div>
+          <div class="tl-find fn"><span class="tl-ft">MINOR</span>Walk-in cooler floor edges — accumulation of soilage</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="section fade-in">
+    <div class="section-label">📊 CATEGORY STATS — ALL 3 ROUNDS</div>
+    <div style="overflow-x:auto">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="min-width:210px">CATEGORY</th>
+            <th>EHA ROUND 1</th>
+            <th>EHA ROUND 2</th>
+            <th>EHA ROUND 3</th>
+            <th>STATUS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="td-name">HACCP Program</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.55rem">86.2%</td><td style="color:var(--neon-pink);font-family:var(--pixel-font);font-size:.55rem">76.9%</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.55rem">92.3%</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.42rem">MIXED</td></tr>
+          <tr><td class="td-name">Supervisor & Compliance</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">PERFECT</td></tr>
+          <tr><td class="td-name">Allergen Compliancy</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">PERFECT</td></tr>
+          <tr><td class="td-name">Associate Health & Hygiene</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">PERFECT</td></tr>
+          <tr><td class="td-name">Prevent Contam. from Hands</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">PERFECT</td></tr>
+          <tr><td class="td-name">Safe Food Sources</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">PERFECT</td></tr>
+          <tr><td class="td-name">Protection from Contamination</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.55rem">89.3%</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.55rem">91.1%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">FIXED IT!</td></tr>
+          <tr><td class="td-name">Temp Control for Safety</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">97.6%</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.55rem">92.9%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">FIXED IT!</td></tr>
+          <tr><td class="td-name">Food Ident. & Date Marking</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">PERFECT</td></tr>
+          <tr><td class="td-name">Equip., Utensils, Linens</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.55rem">84.2%</td><td style="color:var(--neon-pink);font-family:var(--pixel-font);font-size:.55rem">73.7%</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.55rem">89.5%</td><td style="color:var(--neon-orange);font-family:var(--pixel-font);font-size:.42rem">MIXED</td></tr>
+          <tr><td class="td-name">Chemicals</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.55rem">100%</td><td style="color:var(--neon-green);font-family:var(--pixel-font);font-size:.42rem">PERFECT</td></tr>
+          <tr><td class="td-name">Physical Facilities</td><td style="color:var(--neon-pink);font-family:var(--pixel-font);font-size:.55rem">69.2%</td><td style="color:var(--neon-pink);font-family:var(--pixel-font);font-size:.55rem">76.9%</td><td style="color:var(--neon-pink);font-family:var(--pixel-font);font-size:.55rem">73.1%</td><td style="color:var(--neon-pink);font-family:var(--pixel-font);font-size:.42rem">STILL DOWN</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section fade-in">
+    <div class="section-label">🎤 AUDITOR SAID IT HIMSELF</div>
+    <div class="speech-bubble">
+      <div class="speech-text">"Overall good job with corrections and logs. Continue to improve. Great job with overall food storage and labeling. Great work by associates with PPE use."</div>
+      <div class="speech-attr">— JUAN MAGANA, EHA AUDITOR — APRIL 14, 2026</div>
+    </div>
+    <div class="pixel-alert green">
+      <div class="alert-icon">⬆️</div>
+      <div>
+        <div class="alert-title">THE AUDITOR NOTICED. THAT'S REAL.</div>
+        <div class="alert-body">He specifically called out food storage, labeling, and PPE as best practices. He acknowledged the improvement from the February audit. The team made real progress and it got noticed. That momentum is real — now keep it going into the UA audit.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end EHA page -->
+
+
+<!-- ═══════════════════════════ PAGE 3: WINS = HIGH SCORES ═══ -->
+<div class="page" id="page-wins">
+
+  <div class="pixel-hero">
+    <div class="insert-coin">★ NEW HIGH SCORE ★</div>
+    <div class="hero-pixel-title">
+      <span style="color:var(--neon-yellow)">HIGH</span><br>
+      <span style="color:var(--neon-green)">SCORES</span>
+    </div>
+    <div class="hero-sub">This is what the team already crushed.<br>Don't just read it — feel it. This is YOURS. 🏆</div>
+    <div class="press-start" style="background:var(--neon-green);color:#000">7 CATEGORIES PERFECT ALL 4 AUDITS</div>
+  </div>
+
+  <!-- LEADERBOARD -->
+  <div class="section fade-in">
+    <div class="pixel-alert yellow">
+      <div class="alert-icon">⚠️</div>
+      <div>
+        <div class="alert-title">CRUSHING IT — BUT DON'T TAKE YOUR EYES OFF THE BALL</div>
+        <div class="alert-body">These categories are perfect and that's real. But a perfect score last audit doesn't mean it stays perfect if the team stops paying attention. Jorian is looking for consistency — not a one-time win. Every category below needs the same discipline this audit as it had last time. Don't let a strength become a surprise failure.</div>
+      </div>
+    </div>
+    <div class="leaderboard">
+      <div class="lb-title">◀ TEAM A26 LEADERBOARD ▶</div>
+
+      <div class="lb-row">
+        <div class="lb-rank gold">1ST</div>
+        <div class="lb-name">ASSOCIATE HEALTH & HYGIENE</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-green);box-shadow:0 0 6px var(--neon-green)"></div></div>
+        <div class="lb-score green">100% × 4</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank gold">1ST</div>
+        <div class="lb-name">ALLERGEN COMPLIANCY</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-green);box-shadow:0 0 6px var(--neon-green)"></div></div>
+        <div class="lb-score green">100% × 4</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank gold">1ST</div>
+        <div class="lb-name">HAND CONTAMINATION</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-green);box-shadow:0 0 6px var(--neon-green)"></div></div>
+        <div class="lb-score green">100% × 4</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank gold">1ST</div>
+        <div class="lb-name">CHEMICALS & TOXIC MATERIALS</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-green);box-shadow:0 0 6px var(--neon-green)"></div></div>
+        <div class="lb-score green">100% × 4</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank gold">1ST</div>
+        <div class="lb-name">SAFE FOOD SOURCES</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-green);box-shadow:0 0 6px var(--neon-green)"></div></div>
+        <div class="lb-score green">100% × 4</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank gold">1ST</div>
+        <div class="lb-name">SUPERVISOR & COMPLIANCE</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-green);box-shadow:0 0 6px var(--neon-green)"></div></div>
+        <div class="lb-score green">100% × 4</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank gold">1ST</div>
+        <div class="lb-name">FOOD IDENT. & DATE MARKING</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-green);box-shadow:0 0 6px var(--neon-green)"></div></div>
+        <div class="lb-score green">100% × 3 EHA</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank silver">TOP</div>
+        <div class="lb-name">PROTECTION FROM CONTAM.</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-cyan);box-shadow:0 0 6px var(--neon-cyan)"></div></div>
+        <div class="lb-score" style="color:var(--neon-cyan)">100% APR ↑</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank silver">TOP</div>
+        <div class="lb-name">TEMP CONTROL FOR SAFETY</div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:100%;background:var(--neon-cyan);box-shadow:0 0 6px var(--neon-cyan)"></div></div>
+        <div class="lb-score" style="color:var(--neon-cyan)">100% APR ↑</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TROPHY CARDS -->
+  <div class="section fade-in">
+    <div class="section-label">🏆 TROPHY ROOM — WHAT EACH WIN MEANS</div>
+    <div class="trophy-grid">
+
+      <div class="trophy-card">
+        <span class="trophy-emoji">🧤</span>
+        <div class="trophy-title">HAND HYGIENE &<br>ASSOCIATE HEALTH</div>
+        <div class="trophy-score">21/21 EHA × 3 + UA PASS</div>
+        <div class="trophy-body">No symptomatic associates, ever. Gloves used correctly. Hand washing at designated sinks only. Every HWS stocked — soap, towels, trash can — every audit. The auditor specifically called out PPE use as a best practice in April. That's the team. That's personal discipline showing up in the score.</div>
+      </div>
+
+      <div class="trophy-card">
+        <span class="trophy-emoji">⚠️</span>
+        <div class="trophy-title">ALLERGEN MANAGEMENT</div>
+        <div class="trophy-score">8/8 EHA × 3 + UA 3/3</div>
+        <div class="trophy-body">Allergen signs correct at every station every audit. FLIK policy fully compliant. Full allergen program verified — receive, identify, label, store, handle, segregate. This is one of the highest-liability areas in food service and it's been locked in across every single audit. Four for four.</div>
+      </div>
+
+      <div class="trophy-card">
+        <span class="trophy-emoji">🧴</span>
+        <div class="trophy-title">CHEMICALS & TOXIC MATERIALS</div>
+        <div class="trophy-score">15/15 EHA × 3 + UA 9/9</div>
+        <div class="trophy-body">Chemicals labeled, locked, SDS sheets available every time. No re-use of containers for food. Expiration dates actively monitored — no expired materials found in any audit. Four for four. Consistent discipline on something that's easy to let slip.</div>
+      </div>
+
+      <div class="trophy-card">
+        <span class="trophy-emoji">🏷️</span>
+        <div class="trophy-title">FOOD DATE MARKING</div>
+        <div class="trophy-score">19/19 EHA × 3 AUDITS</div>
+        <div class="trophy-body">TCS food dated on receipt all three EHA audits. Decanted items labeled. No expired RTE TCS food found any EHA audit. The auditor called this out as a best practice in April. This is significant — labeling failures are the most common finding across other FLIK clubs. A26 has held this down.</div>
+      </div>
+
+      <div class="trophy-card">
+        <span class="trophy-emoji">🔥</span>
+        <div class="trophy-title">COOKING & REHEATING</div>
+        <div class="trophy-score">UA 9/9 PERFECT</div>
+        <div class="trophy-body">Three perfect cooking categories in the UA audit. 165°F reheating documented with all required fields including manager verification. Cooking temps correct for every protein and food type. This is the cook line doing their job right when it counted most.</div>
+      </div>
+
+      <div class="trophy-card">
+        <span class="trophy-emoji">❄️</span>
+        <div class="trophy-title">CHILLING & COOLING</div>
+        <div class="trophy-score">UA 3/3 PERFECT</div>
+        <div class="trophy-body">Two-stage cooling followed correctly: 70°F in 2 hours, 41°F in 6. Records complete with manager verification. This is one of the highest-risk categories for foodborne illness and it was done right when the UA auditor was watching.</div>
+      </div>
+
+      <div class="trophy-card">
+        <span class="trophy-emoji">💚</span>
+        <div class="trophy-title">PROTECTION FROM CONTAM.</div>
+        <div class="trophy-score">WENT FROM 89% → 100% BY APR</div>
+        <div class="trophy-body">February EHA flagged raw chicken above RTE vegetables and ice contaminated with an olive. By April: perfect 56/56. The team identified the problem and fixed it. That's what a good crew does — they learn from the round and come back stronger.</div>
+      </div>
+
+      <div class="trophy-card">
+        <span class="trophy-emoji">🌡️</span>
+        <div class="trophy-title">TEMP CONTROL FOR SAFETY</div>
+        <div class="trophy-score">WENT FROM 92.9% → 100% BY APR</div>
+        <div class="trophy-body">TAC logs were a mess in March. By April: perfect 42/42. That recovery happened in 3 weeks. Hot foods on logs, correct discard times, proper manager sign-off. The team knew what needed to change and they changed it.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="section fade-in">
+    <div class="pixel-alert yellow">
+      <div class="alert-icon">⭐</div>
+      <div>
+        <div class="alert-title">THE TEAM IS ALREADY WINNING IN THE PLACES THAT MATTER MOST</div>
+        <div class="alert-body">Seven categories perfect across multiple audits. An auditor who acknowledged real improvement. Two categories flipped from failing to perfect in a single round. This team knows how to fix things when they put their minds to it. The final boss is just next. And now we know the weak points.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end wins page -->
+
+
+<!-- ═══════════════════════════ PAGE 4: REPEAT = CONTINUES USED ═══ -->
+<div class="page" id="page-repeat">
+
+  <div class="pixel-hero">
+    <div class="insert-coin" style="color:var(--neon-orange)">▶ CONTINUE? 10...9...8... ◀</div>
+    <div class="hero-pixel-title">
+      <span style="color:var(--neon-orange)">CONTINUES</span><br>
+      <span style="color:var(--neon-yellow)">USED</span>
+    </div>
+    <div class="hero-sub">These are the bosses we haven't defeated yet.<br>Not because the team can't. Because the fix hasn't been locked in. Let's end the streak.</div>
+    <div class="press-start" style="background:var(--neon-orange);color:#000">FOCUS ON WHAT WE CAN CONTROL — 10 POINTS IS VERY WINNABLE</div>
+  </div>
+
+  <div class="section fade-in">
+    <div class="pixel-alert red">
+      <div class="alert-icon">🔥</div>
+      <div>
+        <div class="alert-title">SOME THINGS ARE OUT OF OUR HANDS — FOCUS ON WHAT ISN'T</div>
+        <div class="alert-body">Not every loss is preventable and that's okay. What matters is locking down everything we CAN control. The team has already proven they can fix things fast — Protection from Contamination went from failing to perfect in one round. Temp Control went from failing to perfect in one round. That's the energy. Let's bring it to everything below.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section fade-in">
+    <div class="section-label">🔁 FULL CONTINUE LIST — EVERY REPEAT FINDING WITH AUDIT TRAIL</div>
+    <div style="overflow-x:auto">
+      <table class="repeat-table">
+        <thead>
+          <tr>
+            <th style="min-width:200px">BOSS NAME</th>
+            <th style="min-width:180px">TIMES FOUGHT</th>
+            <th>HOW TO DEFEAT IT THIS TIME</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <tr>
+            <td>
+              <div class="r-name">🦟 THE FLY BOSS</div>
+              <div class="r-sub">Critical — appeared in every audit. Count increasing.</div>
+            </td>
+            <td>
+              <span class="ap ap-crit">UA DEC — CRIT</span>
+              <span class="ap ap-crit">EHA FEB — CRIT</span>
+              <span class="ap ap-crit">EHA MAR — CRIT</span>
+              <span class="ap ap-crit">EHA APR — CRIT</span>
+            </td>
+            <td>Root cause is harborage — dirty drains and standing water. Call pest control for a targeted unscheduled visit on bar and dish room. Clean floor drains daily (not weekly). Eliminate standing water under bar — find the source. Add UV light trap in bar area. Fly wand or vacuum every non-operating period.</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="r-name">🚰 THE DIRTY DRAIN BOSS</div>
+              <div class="r-sub">Minor EHA — all 3 rounds. Directly spawns the Fly Boss.</div>
+            </td>
+            <td>
+              <span class="ap ap-minor">EHA FEB</span>
+              <span class="ap ap-minor">EHA MAR</span>
+              <span class="ap ap-minor">EHA APR</span>
+            </td>
+            <td>Bar drain, beverage station drain, dish room drain — cited every EHA audit. Flies breed in drain buildup. Move this from a weekly task to a DAILY task with a named person per shift. Standing water under bar is the same problem — dry under all bar equipment every shift.</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="r-name">📊 THE PLUMSENSE BOSS</div>
+              <div class="r-sub">Critical in 2 of 3 EHA rounds. Passed once — team knows how to do it.</div>
+            </td>
+            <td>
+              <span class="ap ap-crit">EHA FEB — CRIT</span>
+              <span class="ap ap-pass">EHA MAR — PASS</span>
+              <span class="ap ap-crit">EHA APR — CRIT</span>
+            </td>
+            <td>FOH fridge and freezer logs missing for most days in the 2 weeks before April audit. The team passed in March — so they know how to do this. Assign one person per shift to own Plumsense before the shift ends. Manager verifies before signing off. Both AM and PM required for every cooler and freezer.</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="r-name">🔧 THE DIRTY SURFACES BOSS</div>
+              <div class="r-sub">⚠️ EACH dirty surface found is its own point lost — not grouped. This adds up fast.</div>
+            </td>
+            <td>
+              <span class="ap ap-minor">UA DEC</span>
+              <span class="ap ap-minor">EHA FEB</span>
+              <span class="ap ap-minor">EHA MAR</span>
+              <span class="ap ap-minor">EHA APR</span>
+            </td>
+            <td>This is no longer a single grouped finding — every individual dirty surface Jorian finds is its own point deducted. Fan covers, walk-in floor edges, food debris in cabinet, hot box floor, debris behind Coke freestyle — if all five are dirty that could be five separate points gone, nearly half our entire remaining budget. This is a team effort. BOH owns the kitchen surfaces, ACA owns the deep clean, but everyone needs to keep an eye out and speak up when something is dirty. Don't wait for the cleaning schedule — if you see it, clean it or flag it immediately.</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="r-name">🔩 THE CAULKING BOSS</div>
+              <div class="r-sub">Major in UA + Minor in 2 of 3 EHA rounds. Creates standing water = flies.</div>
+            </td>
+            <td>
+              <span class="ap ap-major">UA DEC — MAJOR</span>
+              <span class="ap ap-minor">EHA FEB</span>
+              <span class="ap ap-minor">EHA APR</span>
+            </td>
+            <td>Caulking at 3-comp sink wall and dish machine drain board both deteriorating. Creates water pooling on the floor which feeds the fly problem. This is a maintenance item — report in writing now and escalate if not repaired in 5 business days. Both locations need to be documented.</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="r-name">📋 THE TAC LOG BOSS</div>
+              <div class="r-sub">Major in UA + EHA March. Defeated in April — keep it that way.</div>
+            </td>
+            <td>
+              <span class="ap ap-major">UA DEC — MAJOR</span>
+              <span class="ap ap-major">EHA MAR — MAJOR</span>
+              <span class="ap ap-pass">EHA APR — DEFEATED!</span>
+            </td>
+            <td>TAC logs were fixed by April — keep it going. Hot foods on logs. Actual discard times only. Manager signs only when the log is complete and correct. The fix worked. Don't let it slip back. Consistency is the weapon.</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="r-name">🧹 THE PHYSICAL FACILITIES BOSS</div>
+              <div class="r-sub">Has NEVER passed EHA. Scores: 69%, 77%, 73%.</div>
+            </td>
+            <td>
+              <span class="ap ap-minor">EHA FEB — 69%</span>
+              <span class="ap ap-minor">EHA MAR — 77%</span>
+              <span class="ap ap-minor">EHA APR — 73%</span>
+            </td>
+            <td>Flies and floor drains are the main drivers. Ceiling tiles in various kitchen locations are damaged — maintenance item, report and escalate. The lighting issue from February needs to be confirmed resolved. Physical Facilities is the single worst-performing EHA category across all 3 rounds.</td>
+          </tr>
+
+          <tr>
+            <td>
+              <div class="r-name">🪣 ICE BUCKET & UTENSIL BOSS</div>
+              <div class="r-sub">Minor in UA + multiple EHA rounds.</div>
+            </td>
+            <td>
+              <span class="ap ap-minor">UA DEC</span>
+              <span class="ap ap-minor">EHA FEB</span>
+              <span class="ap ap-minor">EHA MAR</span>
+            </td>
+            <td>Ice buckets stored UPSIDE DOWN when not in use — upright allows contamination to settle. Check every opening walk. Also: discard chipped/cracked utensils, remove wooden clipboards (replace with plastic/metal), remove cardboard from food prep areas. Store clean utensils face-down.</td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section fade-in">
+    <div class="section-label">🧩 WHY THESE KEEP COMING BACK</div>
+    <div class="pattern-grid">
+      <div class="pattern-card" data-num="PATTERN 1">
+        <span class="pattern-icon">📅</span>
+        <div class="pattern-title">THE CLEANING SCHEDULE ISN'T BEING COMPLETED</div>
+        <div class="pattern-body">Fan covers, drains, equipment surfaces — on the cleaning schedule but repeatedly not getting done. Every task needs a named person and a sign-off. No signature without actually checking.</div>
+      </div>
+      <div class="pattern-card" data-num="PATTERN 2">
+        <span class="pattern-icon">✍️</span>
+        <div class="pattern-title">LOGS ARE PRESENT BUT INCOMPLETE</div>
+        <div class="pattern-body">Plumsense, TAC logs, production logs — all get filled out inconsistently. 80% complete is still a finding. A manager signing an incomplete log makes it a double finding. If it's not fully filled out, the manager does not sign it — they fix it first.</div>
+      </div>
+      <div class="pattern-card" data-num="PATTERN 3">
+        <span class="pattern-icon">🔗</span>
+        <div class="pattern-title">FLIES, DRAINS, AND CAULKING ARE ONE PROBLEM</div>
+        <div class="pattern-body">Dirty drains → standing water → damaged caulking creating more water pooling → flies breeding and growing. Not three issues — one chain. Fix the daily drain cleaning and repair the caulking and the fly boss stops spawning.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end repeat page -->
+
+
+<!-- ═══════════════════════════ PAGE: LEVEL UP DANGER ═══ -->
+<div class="page" id="page-escalate">
+
+  <div class="pixel-hero">
+    <div class="insert-coin" style="color:var(--neon-yellow);animation:blink 1s step-end infinite">⭐ THE TEAM ALREADY KNOWS HOW TO WIN ⭐</div>
+    <div class="hero-pixel-title">
+      <span style="color:var(--neon-yellow)">LEVEL</span><br>
+      <span style="color:var(--neon-pink)">UP</span><br>
+      <span style="color:var(--neon-cyan)">RULES</span>
+    </div>
+    <div class="hero-sub">One rule changed everything.<br>Repeat a December violation and it jumps one severity level.<br>But here's the flip side — the team already fixed half of them.</div>
+    <div class="press-start" style="background:var(--neon-green);color:#000">YOU HAVE DONE THIS BEFORE — DO IT AGAIN</div>
+  </div>
+
+  <!-- THE RULE + MOTIVATION -->
+  <div class="section fade-in">
+    <div class="section-label">📨 THE ONE RULE THAT CHANGES EVERYTHING</div>
+
+    <div class="pixel-alert yellow">
+      <div class="alert-icon">⚡</div>
+      <div>
+        <div class="alert-title">REPEAT A DECEMBER VIOLATION = IT JUMPS ONE SEVERITY LEVEL. NO EXCEPTIONS.</div>
+        <div class="alert-body">Major becomes Critical. Minor becomes Major. Jorian reviewed the December CAPs and he's coming back specifically to check that the fixes actually stuck. His four biggest priorities: <strong style="color:var(--neon-yellow)">LABELING — ALLERGEN STORAGE — CLEANLINESS — LOGS.</strong></div>
+      </div>
+    </div>
+
+    <div class="pixel-alert yellow">
+      <div class="alert-icon">⏰</div>
+      <div>
+        <div class="alert-title">HE MAY WALK IN WITH NO WARNING</div>
+        <div class="alert-body">Jorian has DEN on his radar within the next month. No set date. Every shift needs to run like today is the day.</div>
+      </div>
+    </div>
+
+    <div class="pixel-alert green">
+      <div class="alert-icon">💚</div>
+      <div>
+        <div class="alert-title">THE TEAM ALREADY FIXED THINGS FAST BEFORE — THIS IS NO DIFFERENT</div>
+        <div class="alert-body">Protection from Contamination: failing in February, perfect by April. Temp Control: failing in March, perfect by April. The team has proven they can flip a category in a single round when they're locked in. Every item below is fixable. The hard part isn't knowing what to do — it's staying consistent every shift until Jorian walks in. That's it. Consistency wins this.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCORE MATH -->
+  <div class="section fade-in">
+    <div class="section-label">🔢 THE NUMBERS</div>
+    <div class="score-strip">
+      <div class="score-block">
+        <div class="score-label">LAST SCORE</div>
+        <div class="score-val pink-val">109</div>
+        <div class="score-sub">DEC 2025</div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">MIN TO PASS</div>
+        <div class="score-val yellow-val">125</div>
+        <div class="score-sub">90% THRESHOLD</div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">TOTAL AVAILABLE</div>
+        <div class="score-val cyan-val">138</div>
+        <div class="score-sub">POSSIBLE POINTS</div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">REMAINING BUDGET</div>
+        <div class="score-val" style="color:var(--neon-orange);text-shadow:0 0 10px var(--neon-orange)">10 PTS</div>
+        <div class="score-sub">CAN STILL LOSE & PASS</div>
+      </div>
+    </div>
+    <div class="pixel-alert orange">
+      <div class="alert-icon">🎮</div>
+      <div>
+        <div class="alert-title">10 POINTS IS VERY WINNABLE — IF WE STOP THE REPEATS</div>
+        <div class="alert-body">December lost 26 points outside of known losses. We only need to lose 10 to pass. That means cutting the point losses by more than half. Avoid the repeats below and this score is reachable. The team is more than capable of this.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUICK REFERENCE — MAJORS BECOMING CRITICALS -->
+  <div class="section fade-in">
+    <div class="section-label">💀 DECEMBER MAJORS — DON'T LET JORIAN FIND THESE AGAIN</div>
+    <p style="font-family:var(--vt);font-size:1.2rem;color:var(--text2);margin-bottom:1.2rem;letter-spacing:1px">Each of these was a Major in December. Found again = automatic Critical. Full details are in the Boss Fight and Daily Walk pages — this is the quick reminder.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px">
+
+      <div style="background:var(--panel);border:2px solid var(--neon-pink);border-left:5px solid var(--neon-pink);padding:1rem;display:flex;gap:.8rem;align-items:flex-start">
+        <div style="font-size:1.6rem;flex-shrink:0">🏷️</div>
+        <div>
+          <div style="font-family:var(--pixel-font);font-size:0.42rem;color:var(--neon-pink);margin-bottom:.3rem;line-height:1.8">LABELING — JORIAN'S #1</div>
+          <div style="font-family:var(--vt);font-size:1rem;color:var(--text2);line-height:1.5">Expired items, missing receive dates, unlabeled bar items. Every shelf, every shift. Use-by AND received-on date on everything open.</div>
+        </div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-pink);border-left:5px solid var(--neon-pink);padding:1rem;display:flex;gap:.8rem;align-items:flex-start">
+        <div style="font-size:1.6rem;flex-shrink:0">📋</div>
+        <div>
+          <div style="font-family:var(--pixel-font);font-size:0.42rem;color:var(--neon-pink);margin-bottom:.3rem;line-height:1.8">LOGS — JORIAN'S #4</div>
+          <div style="font-family:var(--vt);font-size:1rem;color:var(--text2);line-height:1.5">TAC logs missing initials, actual discard times, hot foods. Manager signs only when fully complete. Never projected times.</div>
+        </div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-pink);border-left:5px solid var(--neon-pink);padding:1rem;display:flex;gap:.8rem;align-items:flex-start">
+        <div style="font-size:1.6rem;flex-shrink:0">🧹</div>
+        <div>
+          <div style="font-family:var(--pixel-font);font-size:0.42rem;color:var(--neon-pink);margin-bottom:.3rem;line-height:1.8">CLEANLINESS — JORIAN'S #3</div>
+          <div style="font-family:var(--vt);font-size:1rem;color:var(--text2);line-height:1.5">Oven side, back wall, ceiling tiles, gaskets, soap bucket label, mop head hanging. Each dirty surface is its own point. Team effort.</div>
+        </div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-pink);border-left:5px solid var(--neon-pink);padding:1rem;display:flex;gap:.8rem;align-items:flex-start">
+        <div style="font-size:1.6rem;flex-shrink:0">❄️</div>
+        <div>
+          <div style="font-family:var(--pixel-font);font-size:0.42rem;color:var(--neon-pink);margin-bottom:.3rem;line-height:1.8">ICE BUILDUP — STORAGE</div>
+          <div style="font-family:var(--vt);font-size:1rem;color:var(--text2);line-height:1.5">Walk-in freezer and milk fridge. Defrost both and keep clear. Weekly check with sign-off.</div>
+        </div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-pink);border-left:5px solid var(--neon-pink);padding:1rem;display:flex;gap:.8rem;align-items:flex-start">
+        <div style="font-size:1.6rem;flex-shrink:0">🔩</div>
+        <div>
+          <div style="font-family:var(--pixel-font);font-size:0.42rem;color:var(--neon-pink);margin-bottom:.3rem;line-height:1.8">INFRASTRUCTURE</div>
+          <div style="font-family:var(--vt);font-size:1rem;color:var(--text2);line-height:1.5">Caulking at 3-comp sink and coffee machine, ceiling tiles, flooring, Refrigerator 5 gasket. Report to maintenance now if not already fixed.</div>
+        </div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-pink);border-left:5px solid var(--neon-pink);padding:1rem;display:flex;gap:.8rem;align-items:flex-start">
+        <div style="font-size:1.6rem;flex-shrink:0">🚿</div>
+        <div>
+          <div style="font-family:var(--pixel-font);font-size:0.42rem;color:var(--neon-pink);margin-bottom:.3rem;line-height:1.8">PLUMBING — PIPE BELOW WATER LINE</div>
+          <div style="font-family:var(--vt);font-size:1rem;color:var(--text2);line-height:1.5">FOH item. Check the December audit photo. If unresolved, escalate to a manager today.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MINORS BECOMING MAJORS -->
+  <div class="section fade-in">
+    <div class="section-label">🟠 DECEMBER MINORS — FOUND AGAIN = AUTOMATIC MAJOR</div>
+    <p style="font-family:var(--vt);font-size:1.2rem;color:var(--text2);margin-bottom:1.2rem;letter-spacing:1px">Small fixes. Every single one is quick to resolve. There's no reason for any of these to appear again.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+
+      <div style="background:var(--panel);border:2px solid var(--neon-orange);border-left:4px solid var(--neon-orange);padding:.8rem">
+        <div style="font-family:var(--pixel-font);font-size:0.4rem;color:var(--neon-orange);margin-bottom:.3rem;line-height:1.8">🐔 RECEIVING TEMP — BOH</div>
+        <div style="font-family:var(--vt);font-size:1rem;color:var(--text2)">Actual temp for Poultry, Pork, Dairy, Frozen when received. Never N/A. If it didn't arrive, leave blank.</div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-orange);border-left:4px solid var(--neon-orange);padding:.8rem">
+        <div style="font-family:var(--pixel-font);font-size:0.4rem;color:var(--neon-orange);margin-bottom:.3rem;line-height:1.8">🍽️ UTENSILS UPRIGHT + CHIPPED PLASTIC — FOH</div>
+        <div style="font-family:var(--vt);font-size:1rem;color:var(--text2)">Utensils face-down. Chipped or cracking plastic discarded immediately. Thermometer in clean dedicated container — nothing else inside.</div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-orange);border-left:4px solid var(--neon-orange);padding:.8rem">
+        <div style="font-family:var(--pixel-font);font-size:0.4rem;color:var(--neon-orange);margin-bottom:.3rem;line-height:1.8">🔪 CUTTING BOARDS — BOH</div>
+        <div style="font-family:var(--vt);font-size:1rem;color:var(--text2)">Deep scores = replace before next shift. Order replacements now if not already done.</div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-orange);border-left:4px solid var(--neon-orange);padding:.8rem">
+        <div style="font-family:var(--pixel-font);font-size:0.4rem;color:var(--neon-orange);margin-bottom:.3rem;line-height:1.8">🧪 SANITIZER ESTIMATED — FOH</div>
+        <div style="font-family:var(--vt);font-size:1rem;color:var(--text2)">Test with strips every shift. Log the actual PPM. Never estimate. 400 PPM QUATS target.</div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-orange);border-left:4px solid var(--neon-orange);padding:.8rem">
+        <div style="font-family:var(--pixel-font);font-size:0.4rem;color:var(--neon-orange);margin-bottom:.3rem;line-height:1.8">🪣 ICE BUCKETS UPRIGHT — FOH</div>
+        <div style="font-family:var(--vt);font-size:1rem;color:var(--text2)">Always upside down. Ice scoop outside the bin. Takes 2 seconds to check.</div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-orange);border-left:4px solid var(--neon-orange);padding:.8rem">
+        <div style="font-family:var(--pixel-font);font-size:0.4rem;color:var(--neon-orange);margin-bottom:.3rem;line-height:1.8">🧊 ICE MACHINE CALCIUM — FOH</div>
+        <div style="font-family:var(--vt);font-size:1rem;color:var(--text2)">3rd floor bar ice machine. Descale monthly. Add to regular cleaning schedule.</div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-orange);border-left:4px solid var(--neon-orange);padding:.8rem">
+        <div style="font-family:var(--pixel-font);font-size:0.4rem;color:var(--neon-orange);margin-bottom:.3rem;line-height:1.8">🖊️ RED INK ON LOGS — BOTH</div>
+        <div style="font-family:var(--vt);font-size:1rem;color:var(--text2)">Black or blue ink only. Remove all red pens from kitchen and bar today. Done.</div>
+      </div>
+
+      <div style="background:var(--panel);border:2px solid var(--neon-orange);border-left:4px solid var(--neon-orange);padding:.8rem">
+        <div style="font-family:var(--pixel-font);font-size:0.4rem;color:var(--neon-orange);margin-bottom:.3rem;line-height:1.8">☕ COFFEE FILTERS UPRIGHT — FOH</div>
+        <div style="font-family:var(--vt);font-size:1rem;color:var(--text2)">Upside down, lid on top. Filter face down, rim up. Check every opening walk. 2 seconds.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CLOSING MOTIVATIONAL -->
+  <div class="section fade-in">
+    <div class="pixel-alert green">
+      <div class="alert-icon">🏆</div>
+      <div>
+        <div class="alert-title">EVERY ITEM ON THIS PAGE IS FIXABLE RIGHT NOW</div>
+        <div class="alert-body">None of this requires special equipment, a big budget, or a perfect team. It requires showing up every shift and doing the small things right. Label it. Log it. Clean it. The team has already shown they can do that — the high scores page proves it. Now lock it in and bring that same energy to everything else. This audit is very winnable.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end escalate page -->
+
+<!-- ═══════════════════════════ PAGE: DAILY WALK ═══ -->
+<div class="page" id="page-cheats">
+
+  <div class="pixel-hero">
+    <div class="insert-coin" style="color:var(--neon-purple)">▶ CHEAT CODE ACTIVATED ◀</div>
+    <div class="hero-pixel-title">
+      <span style="color:var(--neon-purple)">DAILY</span><br>
+      <span style="color:var(--neon-yellow)">WALK</span>
+    </div>
+    <div class="hero-sub">Three sections. Each manager runs their own.<br>Tap to check off. Reset for the next shift. 🕹️</div>
+  </div>
+
+  <!-- SUB TABS -->
+  <div style="display:flex;gap:4px;padding:1rem 1.5rem 0;border-bottom:2px solid var(--border);background:var(--panel)">
+    <div class="walk-tab active" data-walk="bar" onclick="switchWalk('bar')" style="font-family:var(--pixel-font);font-size:0.48rem;padding:8px 14px;cursor:pointer;border:2px solid var(--neon-pink);color:var(--neon-pink);background:rgba(255,45,120,0.1);letter-spacing:1px;margin-bottom:-2px;border-bottom:2px solid var(--panel)">🍸 BAR & BEVERAGE</div>
+    <div class="walk-tab" data-walk="kitchen" onclick="switchWalk('kitchen')" style="font-family:var(--pixel-font);font-size:0.48rem;padding:8px 14px;cursor:pointer;border:2px solid var(--pixel);color:var(--text3);letter-spacing:1px;margin-bottom:-2px">🍳 KITCHEN</div>
+    <div class="walk-tab" data-walk="manager" onclick="switchWalk('manager')" style="font-family:var(--pixel-font);font-size:0.48rem;padding:8px 14px;cursor:pointer;border:2px solid var(--pixel);color:var(--text3);letter-spacing:1px;margin-bottom:-2px">👔 MANAGER</div>
+  </div>
+
+  <!-- BAR & BEVERAGE -->
+  <div class="walk-section active" id="walk-bar">
+    <div class="section fade-in">
+      <div class="cheat-box" style="border-color:var(--neon-pink);box-shadow:0 0 20px rgba(255,45,120,0.15)">
+        <div class="cheat-title" style="color:var(--neon-pink)">🍸 BAR & BEVERAGE — DAILY WALK</div>
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>PROGRESS</span>
+            <span id="bar-count">0 / 0 DONE</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="bar-fill" style="width:0%;background:var(--neon-pink);box-shadow:0 0 8px var(--neon-pink)"></div>
+          </div>
+        </div>
+        <div class="cheat-list" id="bar-list"></div>
+        <div style="margin-top:1rem;display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="resetSection('bar')" style="font-family:var(--pixel-font);font-size:0.42rem;background:var(--panel2);color:var(--text3);border:2px solid var(--pixel);padding:8px 14px;cursor:pointer;letter-spacing:1px">RESET NEW SHIFT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KITCHEN -->
+  <div class="walk-section" id="walk-kitchen" style="display:none">
+    <div class="section fade-in">
+      <div class="cheat-box" style="border-color:var(--neon-orange);box-shadow:0 0 20px rgba(255,107,0,0.15)">
+        <div class="cheat-title" style="color:var(--neon-orange)">🍳 KITCHEN — DAILY WALK</div>
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>PROGRESS</span>
+            <span id="kitchen-count">0 / 0 DONE</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="kitchen-fill" style="width:0%;background:var(--neon-orange);box-shadow:0 0 8px var(--neon-orange)"></div>
+          </div>
+        </div>
+        <div class="cheat-list" id="kitchen-list"></div>
+        <div style="margin-top:1rem;display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="resetSection('kitchen')" style="font-family:var(--pixel-font);font-size:0.42rem;background:var(--panel2);color:var(--text3);border:2px solid var(--pixel);padding:8px 14px;cursor:pointer;letter-spacing:1px">RESET NEW SHIFT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANAGER -->
+  <div class="walk-section" id="walk-manager" style="display:none">
+    <div class="section fade-in">
+      <div class="cheat-box" style="border-color:var(--neon-cyan);box-shadow:0 0 20px rgba(0,245,255,0.12)">
+        <div class="cheat-title" style="color:var(--neon-cyan)">👔 MANAGER WALK — DAILY</div>
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>PROGRESS</span>
+            <span id="manager-count">0 / 0 DONE</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="manager-fill" style="width:0%;background:var(--neon-cyan);box-shadow:0 0 8px var(--neon-cyan)"></div>
+          </div>
+        </div>
+        <div class="cheat-list" id="manager-list"></div>
+        <div style="margin-top:1rem;display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="resetSection('manager')" style="font-family:var(--pixel-font);font-size:0.42rem;background:var(--panel2);color:var(--text3);border:2px solid var(--pixel);padding:8px 14px;cursor:pointer;letter-spacing:1px">RESET NEW SHIFT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end daily walk page -->
+
+<script>
+// ── PAGE SWITCHING ──
+function gotoPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelector(`[data-page="${id}"]`).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(runFadeIns, 80);
+}
+
+function toggleCard(card) { card.classList.toggle('open'); }
+
+function runFadeIns() {
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('visible'), i * 50);
+        obs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.04 });
+  document.querySelectorAll('.page.active .fade-in:not(.visible)').forEach(el => obs.observe(el));
+}
+
+// ── WALK SECTION SWITCHING ──
+function switchWalk(id) {
+  document.querySelectorAll('.walk-section').forEach(s => s.style.display = 'none');
+  document.querySelectorAll('.walk-tab').forEach(t => {
+    t.style.borderColor = 'var(--pixel)';
+    t.style.color = 'var(--text3)';
+    t.style.background = 'transparent';
+    t.style.borderBottom = '2px solid var(--border)';
+  });
+  document.getElementById('walk-' + id).style.display = 'block';
+  const colors = { bar: 'var(--neon-pink)', kitchen: 'var(--neon-orange)', manager: 'var(--neon-cyan)' };
+  const bgs = { bar: 'rgba(255,45,120,0.1)', kitchen: 'rgba(255,107,0,0.1)', manager: 'rgba(0,245,255,0.08)' };
+  const activeTab = document.querySelector(`[data-walk="${id}"]`);
+  activeTab.style.borderColor = colors[id];
+  activeTab.style.color = colors[id];
+  activeTab.style.background = bgs[id];
+  activeTab.style.borderBottom = '2px solid var(--panel)';
+}
+
+// ── CHECKLIST DATA ──
+const sections = {
+  bar: [
+    // CRITICAL — repeat = automatic Critical on next audit
+    { text: "🦟 FLIES [BOTH] — Fly wand sweep of bar area and dish room. Remove any flies manually during non-operating hours.", crit: true },
+    { text: "📊 FOH fridge Plumsense — AM temp logged ≤41°F", crit: true },
+    { text: "📊 FOH fridge Plumsense — PM temp logged ≤41°F", crit: true },
+    // December violations — FOH owns
+    { text: "❄️ [DEC MAJOR → CRITICAL IF REPEAT] Coffee machine milk fridge — NO ice buildup. Defrost if needed. Temp ≤41°F.", crit: true },
+    { text: "🏷️ [DEC MAJOR → CRITICAL IF REPEAT] Bar sauce and honey — labeled with use-by AND received-on date. Check every bottle every shift.", crit: true },
+    { text: "📋 [DEC MAJOR → CRITICAL IF REPEAT] TAC logs — initials, ACTUAL discard times (never projected), disposition (sold/discarded/wasted), manager sign-off. HOT FOODS on log too.", crit: true },
+    { text: "🧹 [DEC MAJOR → CRITICAL IF REPEAT] Gaskets on coffee machine fridge — wiped clean, no buildup", crit: true },
+    { text: "📋 [DEC MAJOR → CRITICAL IF REPEAT] Cleaning schedule — filled out and signed by FOH for today. No blank days.", crit: true },
+    { text: "🧴 [DEC MAJOR → CRITICAL IF REPEAT] Soap bucket — labeled with chemical name. Both FOH and BOH soap buckets need labels.", crit: true },
+    { text: "🧹 [DEC BOTH + ACA → MAJOR IF REPEAT] Mop head — stored hanging vertically to air dry. Never face-down in bucket.", crit: true },
+    { text: "🧪 [DEC MINOR → MAJOR IF REPEAT] Bar 3-comp sink — sanitizer TESTED with strips (not estimated). PPM documented. Target 400 PPM QUATS.", crit: false },
+    { text: "🪣 [DEC MINOR → MAJOR IF REPEAT] Ice buckets — ALL stored UPSIDE DOWN. No exceptions.", crit: false },
+    { text: "🧊 [DEC MINOR → MAJOR IF REPEAT] Ice machine 3rd floor bar — no calcium buildup. Descale monthly. Ice scoop stored OUTSIDE bin.", crit: false },
+    { text: "🖊️ [DEC MINOR → MAJOR IF REPEAT] Red pens at bar — REMOVE. Black or blue ink ONLY on all logs.", crit: false },
+    { text: "☕ [DEC MINOR → MAJOR IF REPEAT] Coffee filters — stored UPSIDE DOWN with lid on top. Filter face down, rim up, lid covers opening.", crit: false },
+    { text: "🌡️ [DEC MINOR → MAJOR IF REPEAT] Thermometer probe — stored in a clean dedicated container. Nothing else inside. No pens, no loose items.", crit: false },
+    { text: "🚿 [DEC MAJOR → CRITICAL IF REPEAT] Pipe below water line — look at December audit photo. If unresolved, report to manager immediately to escalate in writing today.", crit: false },
+    // Ongoing FOH checks
+    { text: "🚰 Bar drains cleaned — under bar counter, beverage station by buffet, dish room drains", crit: false },
+    { text: "💧 Under bar counter and behind bar near drains — wiped dry, no standing water, no soilage buildup", crit: false },
+    { text: "⚠️ Allergen signs posted at every serving and buffet station — all correct and current", crit: false },
+    { text: "🍋 TCS foods at bar (lemons, limes, citrus) — stored ≤41°F and dated", crit: false },
+    { text: "🍺 Wine and beer storage — clean, organized, no TCS food stored in this space", crit: false },
+    { text: "🧽 Bar equipment exteriors, handles — wiped down and clean", crit: false },
+  ],
+  kitchen: [
+    // CRITICAL — repeat = automatic Critical on next audit
+    { text: "🦟 FLIES [BOTH] — Fly wand sweep of kitchen and dish room. Remove any flies manually during non-operating hours.", crit: true },
+    { text: "📊 Walk-in cooler Plumsense — AM temp logged ≤41°F", crit: true },
+    { text: "📊 Walk-in freezer Plumsense — AM temp logged ≤0°F", crit: true },
+    { text: "📊 Walk-in cooler Plumsense — PM temp logged ≤41°F", crit: true },
+    { text: "📊 Walk-in freezer Plumsense — PM temp logged ≤0°F", crit: true },
+    { text: "📝 Production logs — manager verification AND date on every entry. No blanks. Manager signs only when fully complete.", crit: true },
+    // December violations — BOH owns
+    { text: "❄️ [DEC MAJOR → CRITICAL IF REPEAT] Walk-in freezer — NO ice buildup. Defrost if needed.", crit: true },
+    { text: "🏷️ [DEC MAJOR → CRITICAL IF REPEAT] Concentrates and cider — labeled with use-by AND received-on date. Walk every shelf.", crit: true },
+    { text: "🥬 [DEC MAJOR → CRITICAL IF REPEAT] Expired oranges and produce — walk every shelf, pull anything expired. No exceptions.", crit: true },
+    { text: "🏷️ [DEC MAJOR → CRITICAL IF REPEAT] Chimichurri — labeled with use-by AND received-on date.", crit: true },
+    { text: "🧴 [DEC MAJOR → CRITICAL IF REPEAT] Soap bucket — labeled with chemical name. Both FOH and BOH soap buckets need labels.", crit: true },
+    { text: "🍳 [DEC MAJOR → CRITICAL IF REPEAT + ACA] Oven side — wiped clean, no debris or grease. ACA cleans, BOH verifies.", crit: true },
+    { text: "🧱 [DEC MAJOR → CRITICAL IF REPEAT + ACA] Back wall by oven — no dirt or grease buildup. ACA cleans, BOH verifies.", crit: true },
+    { text: "🏗️ [DEC MAJOR → CRITICAL IF REPEAT + ACA] Ceiling tiles above prep table — no food debris. ACA cleans, BOH verifies.", crit: true },
+    { text: "🧹 [DEC BOTH + ACA → MAJOR IF REPEAT] Mop head — stored hanging vertically to air dry. Never face-down in bucket.", crit: true },
+    { text: "🥩 [DEC MINOR → MAJOR IF REPEAT] Receiving — Poultry, Pork, Dairy, Frozen temps logged if received. Actual temp only, NEVER N/A. If it didn't arrive, leave blank.", crit: false },
+    { text: "🍽️ [DEC MINOR → MAJOR IF REPEAT] Clean utensils stored face-DOWN — not upright", crit: false },
+    { text: "🚫 [DEC MINOR → MAJOR IF REPEAT] Chipped or cracking plastic on bowls or containers — discard immediately", crit: false },
+    { text: "🔪 [DEC MINOR → MAJOR IF REPEAT] Cutting boards — no deep scores. If scored, replace before next shift.", crit: false },
+    // Ongoing BOH checks
+    { text: "🏷️ Walk-in cooler — every open/decanted item has use-by AND received-on date", crit: false },
+    { text: "🥩 Walk-in storage hierarchy — raw proteins on designated bottom shelf. Nothing raw above RTE.", crit: false },
+    { text: "🏷️ Cook line — every open item labeled. Defrost labels on anything moved from freezer to fridge.", crit: false },
+    { text: "🧹 Walk-in cooler floor edges — wiped clean, no soilage accumulation", crit: false },
+    { text: "🌀 Walk-in cooler fan covers — no dust accumulation", crit: false },
+    { text: "🌡️ Hot box thermometers visible. Hot hold ≥135°F documented.", crit: false },
+    { text: "🧹 Hot box floor — swept and wiped clean", crit: false },
+    { text: "🗄️ Cabinet interiors — no food debris buildup", crit: false },
+    { text: "🥤 Behind Coke freestyle machine — debris cleared", crit: false },
+    { text: "🔄 Dish machine — AM and PM sanitization logs BOTH completed on Plumsense", crit: false },
+    { text: "🌿 Produce wash log — every batch logged individually including triple-washed. Chemical concentration documented.", crit: false },
+    { text: "🛡️ No food stored under pest light trap", crit: false },
+    { text: "🖊️ No red pens in kitchen. Black or blue ink ONLY on all logs.", crit: false },
+    { text: "☕ Coffee filters — quick check: upside down with lid on top (BOH keeps an eye out)", crit: false },
+  ],
+  manager: [
+    // CRITICAL
+    { text: "📋 Calibration records — accessible and current for ALL thermometers, gauges, and scales", crit: true },
+    { text: "✅ BAR & BEVERAGE checklist — confirm completed this shift", crit: true },
+    { text: "✅ KITCHEN checklist — confirm completed this shift", crit: true },
+    { text: "📋 Review ALL logs — TAC, production, bar logs. Sign only when fully complete and correct. Incomplete = correct it first, then sign.", crit: true },
+    // December violations — Manager/Both
+    { text: "🦟 [DEC CRITICAL — BOTH] Pest control devices — all flush to wall. Pest control binder complete: contract, insurance, device map, sighting log, service reports, SDS sheets, operator license, pesticide log.", crit: true },
+    // Infrastructure — flag and escalate
+    { text: "🔩 [DEC MAJOR → CRITICAL IF REPEAT] Caulking at 3-comp sink — intact? If deteriorating, report to maintenance in writing today.", crit: false },
+    { text: "🔩 [DEC MAJOR → CRITICAL IF REPEAT] Caulking at coffee machine area — intact? If deteriorating, report to maintenance in writing today.", crit: false },
+    { text: "🏗️ [DEC MAJOR → CRITICAL IF REPEAT + ACA] Ceiling tiles above prep table — damaged or gaps? Report to maintenance if yes. ACA cleans, manager escalates.", crit: false },
+    { text: "🏗️ [DEC MAJOR → CRITICAL IF REPEAT] Damaged flooring and wall corner by downstairs prep area — confirmed repaired? If not, escalate today.", crit: false },
+    { text: "🧰 [DEC MAJOR → CRITICAL IF REPEAT] Gasket on Refrigerator 5 — intact? If broken, report to maintenance immediately.", crit: false },
+    { text: "🏗️ [DEC MINOR → MAJOR IF REPEAT] Ceiling debris — ONE TIME ACTION: cut it down yourselves or call maintenance. Must be gone before Jorian walks in. Once done, check this off permanently.", crit: false },
+    { text: "🏗️ [DEC MINOR → MAJOR IF REPEAT] Debris hanging from ceiling — confirmed cleared?", crit: false },
+    // Ongoing manager checks
+    { text: "🧹 [DEC BOTH + ACA] Mop head verified hanging vertically — spot check both FOH and BOH", crit: false },
+    { text: "🔒 Chemicals locked when not in active use", crit: false },
+    { text: "🏷️ ServSafe cert posted and current. Health Dept license visible.", crit: false },
+    { text: "⚠️ Allergen signs — verified at every station. FPM ingredient list current with any menu changes.", crit: false },
+  ]
+};
+
+function renderSection(key) {
+  const items = sections[key];
+  const saved = JSON.parse(localStorage.getItem('a26_walk_' + key) || '[]');
+  const list = document.getElementById(key + '-list');
+  list.innerHTML = '';
+  items.forEach((c, i) => {
+    const done = saved.includes(i);
+    const div = document.createElement('div');
+    div.className = 'cheat-item' + (done ? ' done' : '');
+    div.onclick = () => toggleItem(key, i);
+    div.innerHTML = `
+      <div class="cheat-key" style="${done ? 'background:var(--neon-green);color:#000' : ''}">${done ? '✓ DONE' : 'TAP'}</div>
+      <div class="cheat-text">${c.text}${c.crit ? '<span class="cheat-crit">CRITICAL</span>' : ''}</div>
+    `;
+    list.appendChild(div);
+  });
+  updateProgress(key, saved, items.length);
+}
+
+function toggleItem(key, i) {
+  const saved = JSON.parse(localStorage.getItem('a26_walk_' + key) || '[]');
+  const idx = saved.indexOf(i);
+  if (idx === -1) saved.push(i); else saved.splice(idx, 1);
+  localStorage.setItem('a26_walk_' + key, JSON.stringify(saved));
+  renderSection(key);
+}
+
+function resetSection(key) {
+  localStorage.removeItem('a26_walk_' + key);
+  renderSection(key);
+}
+
+function updateProgress(key, saved, total) {
+  const pct = Math.round(saved.length / total * 100);
+  document.getElementById(key + '-count').textContent = `${saved.length} / ${total} DONE`;
+  document.getElementById(key + '-fill').style.width = pct + '%';
+}
+
+function renderAll() {
+  renderSection('bar');
+  renderSection('kitchen');
+  renderSection('manager');
+}
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', () => {
+  renderAll();
+  runFadeIns();
+});
+setTimeout(renderAll, 100);
+setTimeout(runFadeIns, 200);
+</script>
+</body>
+</html>
